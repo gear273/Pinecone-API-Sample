@@ -282,6 +282,8 @@ class Program
         
         await UpsertVectors(vectors);
 
+        // These examples are for testing and development purposes only and do not represent real-world scenarios.
+
         string user_query = "Tell me about Alex's report on the building.";
         await ProcessQuery(user_query, vectors);
 
