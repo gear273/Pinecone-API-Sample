@@ -253,13 +253,23 @@ class Program
             if (vector != null)
             {
                 string text = vector.Text;
-                Console.WriteLine($"Context: {text.Substring(0, Math.Min(text.Length, 250))}");
+                Console.WriteLine($"Context: {text.Substring(0, Math.Min(text.Length,150))}");
                 matchingTexts.Add(text);
             }
         }
 
         return matchingTexts;
     }
+
+    // Function to find context for a query
+    static async Task<List<string>> ProcessQuery(string user_query, List<Vector> vectors){
+        List<float> queryValues = await GetEmbedding(user_query);
+        Vector queryVector = new Vector("Query", user_query, queryValues, null);
+        List<string> matches = await PineconeQuery(queryVector);
+        List<string> matchingTexts = await FindMatchingText(matches, vectors);
+        return matchingTexts;
+    }
+
 
     // Main
     static async Task Main(string[] args){
@@ -273,10 +283,13 @@ class Program
         await UpsertVectors(vectors);
 
         string user_query = "Tell me about Alex's report on the building.";
-        List<float> queryValues = await GetEmbedding(user_query);
-        Vector queryVector = new Vector("Query", user_query, queryValues, null);
-        List<string> matches = await PineconeQuery(queryVector);
+        await ProcessQuery(user_query, vectors);
 
-        List<string> matchingTexts = await FindMatchingText(matches, vectors);
+        string user_query = "How can Lumina Towers reduce its carbon footprint and promote sustainability?";
+        await ProcessQuery(user_query, vectors);
+
+        string user_query = "What measures can be taken to improve the energy efficiency of the building's lighting system?";
+        await ProcessQuery(user_query, vectors);
+        
     }
 }
