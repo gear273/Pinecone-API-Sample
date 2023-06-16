@@ -1,10 +1,6 @@
-using System;
-using System.Net.Http;
-using System.Threading.Tasks;
 using System.Text;
 using System.Text.Json;
 using System.Net.Http.Headers;
-using System.IO;
 
 class Program
 {
@@ -69,16 +65,17 @@ class Program
     }
     
     // Function to get embedding from OpenAI Embeddings API
-    static async Task<List<float>> GetEmbedding(string text){
+    static async Task<List<float>> GetEmbedding(string text)
+    {
         using (HttpClient client = new HttpClient())
         {
-            try 
+            try
             {
                 var request = new HttpRequestMessage
                 {
                     Method = HttpMethod.Post,
                     RequestUri = new Uri("https://api.openai.com/v1/embeddings"),
-                    Headers = { { "Authorization", $"Bearer {OPENAI_API_KEY}" },{ "accept", "application/json" }},
+                    Headers = { { "Authorization", $"Bearer {OPENAI_API_KEY}" }, { "accept", "application/json" } },
                     Content = new StringContent(JsonSerializer.Serialize(new { input = text, model = "text-embedding-ada-002" }), Encoding.UTF8, "application/json")
                 };
 
@@ -89,7 +86,7 @@ class Program
                     var jsonDocument = JsonDocument.Parse(body);
                     var vec = jsonDocument.RootElement.GetProperty("data")[0].GetProperty("embedding");
                     Console.WriteLine("Embedding Created Successfully");
-                     return JsonSerializer.Deserialize<List<float>>(vec.ToString());
+                    return JsonSerializer.Deserialize<List<float>>(vec.ToString()) ?? new List<float>();
                 }
             }
             catch (HttpRequestException e)
@@ -100,6 +97,7 @@ class Program
             }
         }
     }
+
 
     // Vector object
     public class Vector{
@@ -218,17 +216,23 @@ class Program
                     response.EnsureSuccessStatusCode();
                     var body = await response.Content.ReadAsStringAsync();
                     Console.WriteLine("Query Embedded Successfully");
-                    //Console.WriteLine(body);
+                    Console.WriteLine();
 
-                    // Parse the response JSON and extract the IDs
                     var result = JsonSerializer.Deserialize<JsonDocument>(body);
-                    var matches = result.RootElement.GetProperty("matches");
-
-                    foreach (var match in matches.EnumerateArray())
+                    if (result != null)
                     {
-                        var id = match.GetProperty("id").GetString();
-                        ids.Add(id);
+                        var matches = result.RootElement.GetProperty("matches");
+
+                        foreach (var match in matches.EnumerateArray())
+                        {
+                            var id = match.GetProperty("id").GetString();
+                            if (id != null)
+                            {
+                                ids.Add(id);
+                            }
+                        }
                     }
+
                 }
             }
             catch (HttpRequestException e)
@@ -242,31 +246,32 @@ class Program
     }
 
     // Function that takes IDs and finds associated text
-    static async Task<List<string>> FindMatchingText(List<string> IDs, List<Vector> vectors){
+    static List<string> FindMatchingText(List<string> IDs, List<Vector> vectors){
         List<string> matchingTexts = new List<string>();
 
         foreach (var id in IDs)
         {
-            // Find the corresponding vector object
-            Vector vector = vectors.FirstOrDefault(v => v.Id == id);
+            Vector? vector = vectors.FirstOrDefault(v => v.Id == id); 
 
             if (vector != null)
             {
-                string text = vector.Text;
-                Console.WriteLine($"Context: {text.Substring(0, Math.Min(text.Length,150))}");
-                matchingTexts.Add(text);
+                string? text = vector.Text; 
+
+                if (text != null)
+                {
+                    matchingTexts.Add(text);
+                }
             }
         }
 
         return matchingTexts;
     }
-
     // Function to find context for a query
     static async Task<List<string>> ProcessQuery(string user_query, List<Vector> vectors){
         List<float> queryValues = await GetEmbedding(user_query);
-        Vector queryVector = new Vector("Query", user_query, queryValues, null);
+        Vector queryVector = new Vector("Query", user_query, queryValues, new Dictionary<string, int> { { "Query", -1 } } );
         List<string> matches = await PineconeQuery(queryVector);
-        List<string> matchingTexts = await FindMatchingText(matches, vectors);
+        List<string> matchingTexts = FindMatchingText(matches, vectors);
         return matchingTexts;
     }
 
@@ -282,16 +287,14 @@ class Program
         
         await UpsertVectors(vectors);
 
-        // These examples are for testing and development purposes only and do not represent real-world scenarios.
-
         string user_query = "Tell me about Alex's report on the building.";
         await ProcessQuery(user_query, vectors);
 
-        string user_query = "How can Lumina Towers reduce its carbon footprint and promote sustainability?";
+        user_query = "How can Lumina Towers reduce its carbon footprint and promote sustainability?";
         await ProcessQuery(user_query, vectors);
 
-        string user_query = "What measures can be taken to improve the energy efficiency of the building's lighting system?";
+        user_query = "What measures can be taken to improve the energy efficiency of the building's lighting system?";
         await ProcessQuery(user_query, vectors);
-        
+
     }
 }
